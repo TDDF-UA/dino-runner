@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>Mochi Backyard Runner</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      -webkit-user-select: none;
+      user-select: none;
+    }
+
+    body {
+      margin: 0;
+      padding: 10px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      background-color: #eef5e8;
+      font-family: 'Courier New', Courier, monospace;
+      touch-action: manipulation;
+    }
+
+    h1 {
+      margin-top: 20px;
+      font-size: 1.8rem;
+      color: #2e4a21;
+      text-align: center;
+    }
+
+    p {
+      color: #4a5d3e;
+      margin-bottom: 15px;
+      text-align: center;
+      font-size: 0.9rem;
+    }
+
+    /* Outer Wrapper for Fullscreen Scaling */
+    #gameContainer {
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      width: 100%;
+      max-width: 600px;
+    }
+
+    #gameCanvas {
+      background-color: #a0d8ef;
+      border: 3px solid #2e4a21;
+      box-shadow: 0px 6px 15px rgba(0, 0, 0, 0.15);
+      border-radius: 4px;
+      width: 100%;
+      height: auto;
+      aspect-ratio: 600 / 200;
+      touch-action: none;
+    }
+
+    /* Controls & Buttons */
+    .btn-group {
+      margin-top: 15px;
+      display: flex;
+      gap: 10px;
+    }
+
+    button {
+      background-color: #2e4a21;
+      color: #ffffff;
+      border: none;
+      padding: 10px 18px;
+      font-family: 'Courier New', Courier, monospace;
+      font-weight: bold;
+      font-size: 0.9rem;
+      border-radius: 4px;
+      cursor: pointer;
+      box-shadow: 0px 3px 6px rgba(0, 0, 0, 0.2);
+    }
+
+    button:focus {
+      outline: none; /* Prevents persistent button focus outlines */
+    }
+
+    button:active {
+      transform: translateY(2px);
+    }
+
+    /* --- Native Fullscreen Styling --- */
+    #gameContainer:fullscreen,
+    #gameContainer:-webkit-full-screen {
+      width: 100vw;
+      height: 100vh;
+      max-width: 100vw;
+      background-color: #eef5e8;
+      justify-content: center;
+      padding: 20px;
+    }
+
+    #gameContainer:fullscreen #gameCanvas,
+    #gameContainer:-webkit-full-screen #gameCanvas {
+      width: 100vw;
+      max-height: 100vh;
+      max-width: calc(100vh * (600 / 200)); /* Preserves 3:1 aspect ratio */
+      border: none;
+      box-shadow: none;
+    }
+
+    #gameContainer:fullscreen .btn-group,
+    #gameContainer:-webkit-full-screen .btn-group {
+      position: absolute;
+      bottom: 20px;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>Mochi Backyard Runner</h1>
+  <p>Press <strong>Space / Up Arrow</strong> or <strong>Tap Screen</strong> to jump!</p>
+
+  <div id="gameContainer">
+    <canvas id="gameCanvas" width="600" height="200"></canvas>
+    <div class="btn-group">
+      <button id="fullscreenBtn">📱 Fullscreen Mode</button>
+    </div>
+  </div>
+
+  <script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    const gameContainer = document.getElementById('gameContainer');
+    const fullscreenBtn = document.getElementById('fullscreenBtn');
+
+    // --- Fullscreen Toggle Logic ---
+    fullscreenBtn.addEventListener('click', (e) => {
+      e.stopPropagation(); // Prevents jump trigger on button click
+      fullscreenBtn.blur(); // FIX: Strip focus immediately so Spacebar won't re-click this button!
+      
+      if (!document.fullscreenElement && !document.webkitFullscreenElement) {
+        if (gameContainer.requestFullscreen) {
+          gameContainer.requestFullscreen();
+        } else if (gameContainer.webkitRequestFullscreen) {
+          gameContainer.webkitRequestFullscreen();
+        }
+      } else {
+        if (document.exitFullscreen) {
+          document.exitFullscreen();
+        } else if (document.webkitExitFullscreen) {
+          document.webkitExitFullscreen();
+        }
+      }
+    });
+
+    // --- Image Assets & Preloader ---
+    const images = {};
+    const imageSources = {
+      bg: 'Mochi_background.png',
+      run1: 'Mochi_run1.png',
+      run2: 'Mochi_run2.png',
+      jump: 'Mochi_jump.png',
+      basil: 'Mochi_basil.png',
+      roses: 'Mochi_roses.png',
+      lavender: 'Mochi_lavender.png',
+      figTree: 'Mochi_figtree.png',
+      fig: 'Mochi_fig.png'
+    };
+
+    function removeWhiteBackground(img) {
+      const tempCanvas = document.createElement('canvas');
+      tempCanvas.width = img.naturalWidth || img.width;
+      tempCanvas.height = img.naturalHeight || img.height;
+      const tempCtx = tempCanvas.getContext('2d');
+      tempCtx.drawImage(img, 0, 0);
+
+      const imgData = tempCtx.getImageData(0, 0, tempCanvas.width, tempCanvas.height);
+      const data = imgData.data;
+
+      for (let i = 0; i < data.length; i += 4) {
+        if (data[i] > 215 && data[i + 1] > 215 && data[i + 2] > 215) {
+          data[i + 3] = 0;
+        }
+      }
+
+      tempCtx.putImageData(imgData, 0, 0);
+      return tempCanvas;
+    }
+
+    let loadedImages = 0;
+    for (let src in imageSources) {
+      const rawImg = new Image();
+      rawImg.src = imageSources[src];
+      
+      rawImg.onload = () => {
+        if (src === 'bg') {
+          images[src] = rawImg;
+        } else {
+          try {
+            images[src] = removeWhiteBackground(rawImg);
+          } catch (err) {
+            images[src] = rawImg;
+          }
+        }
+        loadedImages++;
+      };
+
+      rawImg.onerror = () => {
+        console.warn(`Could not load image: ${imageSources[src]}.`);
+        loadedImages++;
+      };
+    }
+
+    function drawSprite(img, x, y, width, height, fallbackColor) {
+      if (img) {
+        ctx.drawImage(img, x, y, width, height);
+      } else {
+        ctx.fillStyle = fallbackColor;
+        ctx.fillRect(x, y, width, height);
+      }
+    }
+
+    // --- High Score Persistence ---
+    let highScore = parseInt(localStorage.getItem('mochi_runner_highscore') || '0', 10);
+
+    // --- Game Variables ---
+    let frame = 0;
+    let score = 0;
+    let gameSpeed = 5;
+    let isGameOver = false;
+    let gravity = 0.6;
+    let obstacles = [];
+
+    let bgX1 = 0;
+    let bgX2 = canvas.width;
+
+    const dino = {
+      x: 50,
+      width: 48,
+      height: 48,
+      y: 200 - 20 - 48,
+      dy: 0,
+      jumpForce: 11,
+      grounded: false
+    };
+
+    // --- Unified Input Handling (Keyboard & Touch) ---
+    function triggerJump(e) {
+      if (e.type === 'touchstart') e.preventDefault();
+
+      if (!isGameOver && dino.grounded) {
+        dino.dy = -dino.jumpForce;
+        dino.grounded = false;
+      } else if (isGameOver) {
+        resetGame();
+      }
+    }
+
+    document.addEventListener('keydown', function(e) {
+      if (e.code === 'Space' || e.code === 'ArrowUp') {
+        e.preventDefault(); // FIX: Prevents default browser button triggers and scrolling!
+        triggerJump(e);
+      }
+    });
+
+    canvas.addEventListener('touchstart', triggerJump, { passive: false });
+
+    function resetGame() {
+      obstacles = [];
+      score = 0;
+      gameSpeed = 5;
+      frame = 0;
+      isGameOver = false;
+      dino.y = canvas.height - 20 - dino.height;
+      dino.dy = 0;
+      bgX1 = 0;
+      bgX2 = canvas.width;
+      update();
+    }
+
+    // --- Game Loop ---
+    function update() {
+      if (isGameOver) return;
+
+      requestAnimationFrame(update);
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      // Background Scroll
+      bgX1 -= gameSpeed * 0.7;
+      bgX2 -= gameSpeed * 0.7;
+
+      if (bgX1 <= -canvas.width) bgX1 = bgX2 + canvas.width;
+      if (bgX2 <= -canvas.width) bgX2 = bgX1 + canvas.width;
+
+      drawSprite(images.bg, bgX1, 0, canvas.width, canvas.height, '#a0d8ef');
+      drawSprite(images.bg, bgX2, 0, canvas.width, canvas.height, '#a0d8ef');
+
+      // Ground
+      ctx.fillStyle = '#2e4a21';
+      ctx.fillRect(0, canvas.height - 20, canvas.width, 20);
+
+      // Player Physics
+      dino.dy += gravity;
+      dino.y += dino.dy;
+
+      if (dino.y + dino.height >= canvas.height - 20) {
+        dino.y = canvas.height - 20 - dino.height;
+        dino.dy = 0;
+        dino.grounded = true;
+      }
+
+      // Render Player
+      let currentSprite;
+      if (!dino.grounded) {
+        currentSprite = images.jump;
+      } else {
+        currentSprite = (Math.floor(frame / 8) % 2 === 0) ? images.run1 : images.run2;
+      }
+
+      drawSprite(currentSprite, dino.x, dino.y, dino.width, dino.height, '#d9822b');
+
+      // Obstacle Spawner
+      if (frame % 90 === 0 || (frame % 110 === 0 && Math.random() > 0.5)) {
+        let isFigObstacle = Math.random() > 0.65;
+
+        if (isFigObstacle) {
+          obstacles.push({
+            type: 'fig',
+            x: canvas.width,
+            y: canvas.height - 20 - 105,
+            width: 32,
+            height: 48,
+            treeWidth: 110,
+            treeHeight: 110
+          });
+        } else {
+          const plants = [
+            { img: images.basil, w: 36, h: 36 },
+            { img: images.roses, w: 36, h: 44 },
+            { img: images.lavender, w: 36, h: 42 }
+          ];
+          const chosenPlant = plants[Math.floor(Math.random() * plants.length)];
+
+          obstacles.push({
+            type: 'plant',
+            img: chosenPlant.img,
+            x: canvas.width,
+            y: canvas.height - 20 - chosenPlant.h,
+            width: chosenPlant.w,
+            height: chosenPlant.h
+          });
+        }
+      }
+
+      // Render & Collision Detection
+      for (let i = 0; i < obstacles.length; i++) {
+        let obs = obstacles[i];
+        obs.x -= gameSpeed;
+
+        if (obs.type === 'fig') {
+          const treeX = obs.x - 38;
+          const treeY = canvas.height - 20 - obs.treeHeight;
+          drawSprite(images.figTree, treeX, treeY, obs.treeWidth, obs.treeHeight, '#3a5f0b');
+          drawSprite(images.fig, obs.x, obs.y, obs.width, obs.height, '#5e2a84');
+        } else {
+          drawSprite(obs.img, obs.x, obs.y, obs.width, obs.height, '#1d8348');
+        }
+
+        const pad = 6;
+        if (
+          dino.x + pad < obs.x + obs.width &&
+          dino.x + dino.width - pad > obs.x &&
+          dino.y + pad < obs.y + obs.height &&
+          dino.y + dino.height - pad > obs.y
+        ) {
+          isGameOver = true;
+        }
+      }
+
+      obstacles = obstacles.filter(obs => obs.x + obs.width + 50 > 0);
+
+      // Score Calculation
+      score++;
+      if (score % 500 === 0) gameSpeed += 0.5;
+
+      const currentPoints = Math.floor(score / 10);
+      if (currentPoints > highScore) {
+        highScore = currentPoints;
+        localStorage.setItem('mochi_runner_highscore', highScore.toString());
+      }
+
+      ctx.fillStyle = '#2e4a21';
+      ctx.font = 'bold 18px Courier New';
+      const displayScore = currentPoints.toString().padStart(5, '0');
+      const displayHigh = highScore.toString().padStart(5, '0');
+      ctx.fillText(`HI ${displayHigh} ${displayScore}`, canvas.width - 210, 30);
+
+      // Game Over Screen
+      if (isGameOver) {
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 30px Courier New';
+        ctx.fillText('G A M E  O V E R', canvas.width / 2 - 130, canvas.height / 2 - 10);
+
+        ctx.font = '16px Courier New';
+        ctx.fillText('Tap or Space to Restart', canvas.width / 2 - 120, canvas.height / 2 + 20);
+      }
+
+      frame++;
+    }
+
+    update();
+  </script>
+</body>
+</html>
