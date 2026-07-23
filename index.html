@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dino Runner Clone with Sound</title>
+  <style>
+    body {
+      margin: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      background-color: #f7f7f7;
+      font-family: 'Courier New', Courier, monospace;
+    }
+
+    h1 { margin-top: 50px; color: #535353; }
+    p { color: #535353; margin-bottom: 20px; }
+    #gameCanvas {
+      background-color: #ffffff;
+      border-bottom: 2px solid #535353;
+      box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.1);
+    }
+  </style>
+</head>
+<body>
+
+  <h1>Dino Runner</h1>
+  <p>Press <strong>Space</strong> or <strong>Up Arrow</strong> to jump.</p>
+  <canvas id="gameCanvas" width="600" height="200"></canvas>
+
+  <script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+
+    // --- Audio Setup ---
+    // The browser will automatically ignore the video and just play the audio!
+    const jumpSound = new Audio('jump.mp4');
+    const crashSound = new Audio('crash.mp4');
+
+    // Game Variables
+    let frame = 0;
+    let score = 0;
+    let gameSpeed = 5;
+    let isGameOver = false;
+    let gravity = 0.6;
+    let obstacles = [];
+
+    const dino = {
+      x: 50, y: 150, width: 30, height: 30,
+      dy: 0, jumpForce: 11, grounded: false
+    };
+
+    // Controls
+    document.addEventListener('keydown', function(e) {
+      if ((e.code === 'Space' || e.code === 'ArrowUp')) {
+        if (!isGameOver && dino.grounded) {
+          dino.dy = -dino.jumpForce;
+          dino.grounded = false;
+          
+          // Play jump sound
+          jumpSound.currentTime = 0; 
+          jumpSound.play();
+
+        } else if (isGameOver) {
+          resetGame();
+        }
+      }
+    });
+
+    function resetGame() {
+      obstacles = [];
+      score = 0;
+      gameSpeed = 5;
+      frame = 0;
+      isGameOver = false;
+      dino.y = 150;
+      dino.dy = 0;
+      update();
+    }
+
+    // Main Game Loop
+    function update() {
+      if (isGameOver) return;
+      
+      requestAnimationFrame(update);
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      // Physics & Gravity
+      dino.dy += gravity;
+      dino.y += dino.dy;
+
+      // Floor collision
+      if (dino.y + dino.height >= canvas.height - 20) {
+        dino.y = canvas.height - 20 - dino.height;
+        dino.dy = 0;
+        dino.grounded = true;
+      }
+
+      // Draw Ground
+      ctx.fillStyle = '#535353';
+      ctx.fillRect(0, canvas.height - 20, canvas.width, 2);
+
+      // Draw Dino
+      ctx.fillStyle = '#535353';
+      ctx.fillRect(dino.x, dino.y, dino.width, dino.height);
+
+      // Obstacle Spawner
+      if (frame % 90 === 0 || (frame % 110 === 0 && Math.random() > 0.5)) {
+        let isPtero = Math.random() > 0.7; 
+
+        if (isPtero) {
+          obstacles.push({
+            x: canvas.width,
+            y: canvas.height - 60 - (Math.random() * 40),
+            width: 30, height: 15, color: '#888'
+          });
+        } else {
+          let cactusHeight = 20 + Math.random() * 25;
+          obstacles.push({
+            x: canvas.width,
+            y: canvas.height - 20 - cactusHeight,
+            width: 20, height: cactusHeight, color: '#1d8348'
+          });
+        }
+      }
+
+      // Manage Obstacles & Collision
+      for (let i = 0; i < obstacles.length; i++) {
+        let obs = obstacles[i];
+        obs.x -= gameSpeed;
+        
+        ctx.fillStyle = obs.color;
+        ctx.fillRect(obs.x, obs.y, obs.width, obs.height);
+
+        // Collision Detection
+        if (
+          dino.x < obs.x + obs.width &&
+          dino.x + dino.width > obs.x &&
+          dino.y < obs.y + obs.height &&
+          dino.y + dino.height > obs.y
+        ) {
+          isGameOver = true;
+          crashSound.currentTime = 0;
+          crashSound.play(); // Play crash sound!
+        }
+      }
+
+      obstacles = obstacles.filter(obs => obs.x + obs.width > 0);
+
+      // Score
+      score++;
+      if (score % 500 === 0) gameSpeed += 0.5;
+
+      ctx.fillStyle = '#535353';
+      ctx.font = 'bold 18px Courier New';
+      let displayScore = Math.floor(score / 10).toString().padStart(5, '0');
+      ctx.fillText('HI 00000 ' + displayScore, canvas.width - 170, 30);
+
+      // Game Over State
+      if (isGameOver) {
+        ctx.fillStyle = '#535353';
+        ctx.font = 'bold 30px Courier New';
+        ctx.fillText('G A M E  O V E R', canvas.width / 2 - 130, canvas.height / 2 - 10);
+        ctx.font = '16px Courier New';
+        ctx.fillText('Press Space to Restart', canvas.width / 2 - 110, canvas.height / 2 + 20);
+      }
+
+      frame++;
+    }
+
+    // Start the game
+    update();
+  </script>
+</body>
+</html>
