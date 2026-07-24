@@ -38,7 +38,6 @@
       font-size: 0.9rem;
     }
 
-    /* Outer Wrapper for Fullscreen Scaling */
     #gameContainer {
       position: relative;
       display: flex;
@@ -60,7 +59,6 @@
       touch-action: none;
     }
 
-    /* Controls & Buttons */
     .btn-group {
       margin-top: 15px;
       display: flex;
@@ -81,14 +79,13 @@
     }
 
     button:focus {
-      outline: none; /* Prevents persistent button focus outlines */
+      outline: none;
     }
 
     button:active {
       transform: translateY(2px);
     }
 
-    /* --- Native Fullscreen Styling --- */
     #gameContainer:fullscreen,
     #gameContainer:-webkit-full-screen {
       width: 100vw;
@@ -103,7 +100,7 @@
     #gameContainer:-webkit-full-screen #gameCanvas {
       width: 100vw;
       max-height: 100vh;
-      max-width: calc(100vh * (600 / 200)); /* Preserves 3:1 aspect ratio */
+      max-width: calc(100vh * (600 / 200));
       border: none;
       box-shadow: none;
     }
@@ -118,7 +115,7 @@
 <body>
 
   <h1>Mochi Backyard Runner</h1>
-  <p>Press <strong>Space / Up Arrow</strong> or <strong>Tap Screen</strong> to jump!</p>
+  <p>Tap/Press for <strong>Short Hop</strong> • Hold for <strong>High Jump</strong>!</p>
 
   <div id="gameContainer">
     <canvas id="gameCanvas" width="600" height="200"></canvas>
@@ -133,10 +130,26 @@
     const gameContainer = document.getElementById('gameContainer');
     const fullscreenBtn = document.getElementById('fullscreenBtn');
 
-    // --- Fullscreen Toggle Logic ---
+    // --- Background Music Setup ---
+    const bgMusic = new Audio('background_music.mp3');
+    bgMusic.loop = true;
+    let isMusicPlaying = false;
+
+    function playMusic() {
+      if (!isMusicPlaying) {
+        bgMusic.play().then(() => {
+          isMusicPlaying = true;
+        }).catch((err) => {
+          console.warn("Autoplay interaction pending:", err);
+        });
+      }
+    }
+
+    // --- Fullscreen Toggle ---
     fullscreenBtn.addEventListener('click', (e) => {
-      e.stopPropagation(); // Prevents jump trigger on button click
-      fullscreenBtn.blur(); // FIX: Strip focus immediately so Spacebar won't re-click this button!
+      e.stopPropagation();
+      fullscreenBtn.blur();
+      playMusic();
       
       if (!document.fullscreenElement && !document.webkitFullscreenElement) {
         if (gameContainer.requestFullscreen) {
@@ -167,19 +180,50 @@
       fig: 'Mochi_fig.png'
     };
 
-    function removeWhiteBackground(img) {
+    function removeOuterBackground(img) {
       const tempCanvas = document.createElement('canvas');
-      tempCanvas.width = img.naturalWidth || img.width;
-      tempCanvas.height = img.naturalHeight || img.height;
+      const w = img.naturalWidth || img.width;
+      const h = img.naturalHeight || img.height;
+      if (!w || !h) return img;
+
+      tempCanvas.width = w;
+      tempCanvas.height = h;
       const tempCtx = tempCanvas.getContext('2d');
       tempCtx.drawImage(img, 0, 0);
 
-      const imgData = tempCtx.getImageData(0, 0, tempCanvas.width, tempCanvas.height);
+      const imgData = tempCtx.getImageData(0, 0, w, h);
       const data = imgData.data;
+      const visited = new Uint8Array(w * h);
+      const queue = [];
 
-      for (let i = 0; i < data.length; i += 4) {
-        if (data[i] > 215 && data[i + 1] > 215 && data[i + 2] > 215) {
-          data[i + 3] = 0;
+      function isBgPixel(idx) {
+        return data[idx] > 200 && data[idx + 1] > 200 && data[idx + 2] > 200 && data[idx + 3] > 0;
+      }
+
+      for (let x = 0; x < w; x++) {
+        queue.push(x, 0, x, h - 1);
+      }
+      for (let y = 0; y < h; y++) {
+        queue.push(0, y, w - 1, y);
+      }
+
+      let qIdx = 0;
+      while (qIdx < queue.length) {
+        const x = queue[qIdx++];
+        const y = queue[qIdx++];
+        const pIdx = y * w + x;
+
+        if (visited[pIdx]) continue;
+        visited[pIdx] = 1;
+
+        const dIdx = pIdx * 4;
+        if (isBgPixel(dIdx)) {
+          data[dIdx + 3] = 0;
+
+          if (x > 0) queue.push(x - 1, y);
+          if (x < w - 1) queue.push(x + 1, y);
+          if (y > 0) queue.push(x, y - 1);
+          if (y < h - 1) queue.push(x, y + 1);
         }
       }
 
@@ -197,7 +241,7 @@
           images[src] = rawImg;
         } else {
           try {
-            images[src] = removeWhiteBackground(rawImg);
+            images[src] = removeOuterBackground(rawImg);
           } catch (err) {
             images[src] = rawImg;
           }
@@ -220,86 +264,214 @@
       }
     }
 
+    // --- 1,200-Point Sky Color Engine ---
+    const skyPhases = [
+      { name: 'Day',         tint: [0, 0, 0, 0],         text: [46, 74, 33],   hasStars: false },
+      { name: 'Duller Blue', tint: [40, 80, 120, 0.25],  text: [25, 50, 25],   hasStars: false },
+      { name: 'Sunset',      tint: [235, 110, 50, 0.55], text: [255, 255, 255],hasStars: false },
+      { name: 'Deep Navy',   tint: [18, 30, 65, 0.75],   text: [220, 230, 245],hasStars: true  },
+      { name: 'Night Black', tint: [10, 14, 26, 0.88],   text: [255, 255, 255],hasStars: true  },
+      { name: 'Sunrise',     tint: [245, 160, 80, 0.50], text: [255, 255, 255],hasStars: false }
+    ];
+
+    const stars = Array.from({ length: 30 }, () => ({
+      x: Math.random() * 600,
+      y: Math.random() * 110,
+      size: Math.random() * 1.5 + 0.5,
+      alpha: Math.random()
+    }));
+
+    function lerp(a, b, t) {
+      return a + (b - a) * t;
+    }
+
+    function lerpColor(c1, c2, t) {
+      return [
+        lerp(c1[0], c2[0], t),
+        lerp(c1[1], c2[1], t),
+        lerp(c1[2], c2[2], t),
+        lerp(c1[3], c2[3], t)
+      ];
+    }
+
+    function getSkyState(currentPoints) {
+      const cycleLength = 1200;
+      const progress = (currentPoints % cycleLength) / cycleLength;
+      const totalPhases = skyPhases.length;
+      
+      const floatIdx = progress * totalPhases;
+      const idx1 = Math.floor(floatIdx) % totalPhases;
+      const idx2 = (idx1 + 1) % totalPhases;
+      const t = floatIdx - Math.floor(floatIdx);
+
+      const p1 = skyPhases[idx1];
+      const p2 = skyPhases[idx2];
+
+      const curTint = lerpColor(p1.tint, p2.tint, t);
+      const curText = lerpColor(p1.text.concat(1), p2.text.concat(1), t);
+
+      return {
+        tintRGBA: `rgba(${Math.round(curTint[0])}, ${Math.round(curTint[1])}, ${Math.round(curTint[2])}, ${curTint[3].toFixed(2)})`,
+        textRGB: `rgb(${Math.round(curText[0])}, ${Math.round(curText[1])}, ${Math.round(curText[2])})`,
+        hasStars: p1.hasStars || p2.hasStars,
+        starOpacity: p1.hasStars && p2.hasStars ? 1 : (p1.hasStars ? (1 - t) : (p2.hasStars ? t : 0))
+      };
+    }
+
     // --- High Score Persistence ---
     let highScore = parseInt(localStorage.getItem('mochi_runner_highscore') || '0', 10);
 
-    // --- Game Variables ---
+    // --- Game Variables & Dynamic Speed ---
     let frame = 0;
     let score = 0;
-    let gameSpeed = 5;
+    let baseSpeed = 5.2;
+    let gameSpeed = baseSpeed;
     let isGameOver = false;
-    let gravity = 0.6;
+    let gravity = 0.55;
     let obstacles = [];
 
-    let bgX1 = 0;
-    let bgX2 = canvas.width;
+    let bgX = 0;
 
+    // Player (Mochi) State
     const dino = {
       x: 50,
       width: 48,
       height: 48,
       y: 200 - 20 - 48,
       dy: 0,
-      jumpForce: 11,
-      grounded: false
+      initialJump: -6.8,
+      grounded: false,
+      isJumping: false,
+      jumpHoldTimer: 0
     };
 
-    // --- Unified Input Handling (Keyboard & Touch) ---
-    function triggerJump(e) {
-      if (e.type === 'touchstart') e.preventDefault();
+    let isInputHeld = false;
+
+    // --- Input Handling & Music Start Trigger ---
+    function startJump() {
+      playMusic(); // Ensure music starts playing on first jump
 
       if (!isGameOver && dino.grounded) {
-        dino.dy = -dino.jumpForce;
+        dino.dy = dino.initialJump;
         dino.grounded = false;
+        dino.isJumping = true;
+        dino.jumpHoldTimer = 0;
+        isInputHeld = true;
       } else if (isGameOver) {
         resetGame();
       }
     }
 
+    function endJump() {
+      isInputHeld = false;
+      dino.isJumping = false;
+      if (dino.dy < -2.5) {
+        dino.dy = -2.5;
+      }
+    }
+
     document.addEventListener('keydown', function(e) {
-      if (e.code === 'Space' || e.code === 'ArrowUp') {
-        e.preventDefault(); // FIX: Prevents default browser button triggers and scrolling!
-        triggerJump(e);
+      if ((e.code === 'Space' || e.code === 'ArrowUp') && !e.repeat) {
+        e.preventDefault();
+        startJump();
       }
     });
 
-    canvas.addEventListener('touchstart', triggerJump, { passive: false });
+    document.addEventListener('keyup', function(e) {
+      if (e.code === 'Space' || e.code === 'ArrowUp') {
+        e.preventDefault();
+        endJump();
+      }
+    });
+
+    canvas.addEventListener('touchstart', (e) => {
+      e.preventDefault();
+      startJump();
+    }, { passive: false });
+
+    canvas.addEventListener('touchend', (e) => {
+      e.preventDefault();
+      endJump();
+    }, { passive: false });
+
+    canvas.addEventListener('touchcancel', (e) => {
+      e.preventDefault();
+      endJump();
+    }, { passive: false });
 
     function resetGame() {
       obstacles = [];
       score = 0;
-      gameSpeed = 5;
+      gameSpeed = baseSpeed;
       frame = 0;
       isGameOver = false;
       dino.y = canvas.height - 20 - dino.height;
       dino.dy = 0;
-      bgX1 = 0;
-      bgX2 = canvas.width;
+      dino.isJumping = false;
+      isInputHeld = false;
+      bgX = 0;
       update();
     }
 
-    // --- Game Loop ---
+    // --- Main Game Loop ---
     function update() {
       if (isGameOver) return;
 
       requestAnimationFrame(update);
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-      // Background Scroll
-      bgX1 -= gameSpeed * 0.7;
-      bgX2 -= gameSpeed * 0.7;
+      const currentPoints = Math.floor(score / 10);
+      const skyState = getSkyState(currentPoints);
 
-      if (bgX1 <= -canvas.width) bgX1 = bgX2 + canvas.width;
-      if (bgX2 <= -canvas.width) bgX2 = bgX1 + canvas.width;
+      // 1. Seamless Mirrored Background Image
+      bgX -= gameSpeed * 0.7;
+      if (bgX <= -canvas.width * 2) {
+        bgX += canvas.width * 2;
+      }
 
-      drawSprite(images.bg, bgX1, 0, canvas.width, canvas.height, '#a0d8ef');
-      drawSprite(images.bg, bgX2, 0, canvas.width, canvas.height, '#a0d8ef');
+      ctx.save();
+      ctx.translate(bgX, 0);
+      drawSprite(images.bg, 0, 0, canvas.width, canvas.height, '#a0d8ef');
+      ctx.restore();
 
-      // Ground
-      ctx.fillStyle = '#2e4a21';
+      ctx.save();
+      ctx.translate(bgX + canvas.width * 2, 0);
+      ctx.scale(-1, 1);
+      drawSprite(images.bg, 0, 0, canvas.width, canvas.height, '#a0d8ef');
+      ctx.restore();
+
+      ctx.save();
+      ctx.translate(bgX + canvas.width * 2, 0);
+      drawSprite(images.bg, 0, 0, canvas.width, canvas.height, '#a0d8ef');
+      ctx.restore();
+
+      // 2. Direct Canvas Sky Color Tinting
+      ctx.fillStyle = skyState.tintRGBA;
+      ctx.fillRect(0, 0, canvas.width, canvas.height - 20);
+
+      // 3. Draw Stars during Navy/Night
+      if (skyState.hasStars && skyState.starOpacity > 0) {
+        ctx.fillStyle = '#ffffff';
+        stars.forEach(star => {
+          star.alpha += (Math.random() - 0.5) * 0.05;
+          if (star.alpha < 0.2) star.alpha = 0.2;
+          if (star.alpha > 0.9) star.alpha = 0.9;
+          ctx.globalAlpha = star.alpha * skyState.starOpacity;
+          ctx.fillRect(star.x, star.y, star.size, star.size);
+        });
+        ctx.globalAlpha = 1.0;
+      }
+
+      // 4. Ground Line
+      ctx.fillStyle = skyState.textRGB;
       ctx.fillRect(0, canvas.height - 20, canvas.width, 20);
 
-      // Player Physics
+      // 5. Variable Jump Physics
+      if (dino.isJumping && isInputHeld && dino.jumpHoldTimer < 10) {
+        dino.dy -= 0.45;
+        dino.jumpHoldTimer++;
+      }
+
       dino.dy += gravity;
       dino.y += dino.dy;
 
@@ -307,9 +479,10 @@
         dino.y = canvas.height - 20 - dino.height;
         dino.dy = 0;
         dino.grounded = true;
+        dino.isJumping = false;
       }
 
-      // Render Player
+      // 6. Render Mochi
       let currentSprite;
       if (!dino.grounded) {
         currentSprite = images.jump;
@@ -319,25 +492,29 @@
 
       drawSprite(currentSprite, dino.x, dino.y, dino.width, dino.height, '#d9822b');
 
-      // Obstacle Spawner
-      if (frame % 90 === 0 || (frame % 110 === 0 && Math.random() > 0.5)) {
+      // 7. Obstacle Spawner
+      const minGap = Math.max(160, 200 - Math.floor((gameSpeed - baseSpeed) * 10));
+      const lastObstacle = obstacles[obstacles.length - 1];
+      const distanceFromLast = lastObstacle ? (canvas.width - lastObstacle.x) : minGap + 1;
+
+      if (distanceFromLast >= minGap && (frame % 35 === 0 && Math.random() > 0.2)) {
         let isFigObstacle = Math.random() > 0.65;
 
         if (isFigObstacle) {
           obstacles.push({
             type: 'fig',
             x: canvas.width,
-            y: canvas.height - 20 - 105,
-            width: 32,
-            height: 48,
-            treeWidth: 110,
-            treeHeight: 110
+            y: canvas.height - 20 - 85,
+            width: 26,
+            height: 38,
+            treeWidth: 140,
+            treeHeight: 140
           });
         } else {
           const plants = [
-            { img: images.basil, w: 36, h: 36 },
-            { img: images.roses, w: 36, h: 44 },
-            { img: images.lavender, w: 36, h: 42 }
+            { img: images.basil, w: 32, h: 32 },
+            { img: images.roses, w: 32, h: 38 },
+            { img: images.lavender, w: 32, h: 36 }
           ];
           const chosenPlant = plants[Math.floor(Math.random() * plants.length)];
 
@@ -352,13 +529,13 @@
         }
       }
 
-      // Render & Collision Detection
+      // 8. Render & Collision Detection
       for (let i = 0; i < obstacles.length; i++) {
         let obs = obstacles[i];
         obs.x -= gameSpeed;
 
         if (obs.type === 'fig') {
-          const treeX = obs.x - 38;
+          const treeX = obs.x - Math.floor((obs.treeWidth - obs.width) / 2);
           const treeY = canvas.height - 20 - obs.treeHeight;
           drawSprite(images.figTree, treeX, treeY, obs.treeWidth, obs.treeHeight, '#3a5f0b');
           drawSprite(images.fig, obs.x, obs.y, obs.width, obs.height, '#5e2a84');
@@ -379,25 +556,24 @@
 
       obstacles = obstacles.filter(obs => obs.x + obs.width + 50 > 0);
 
-      // Score Calculation
+      // 9. Continuous Progression
       score++;
-      if (score % 500 === 0) gameSpeed += 0.5;
+      gameSpeed = baseSpeed + (currentPoints / 250);
 
-      const currentPoints = Math.floor(score / 10);
       if (currentPoints > highScore) {
         highScore = currentPoints;
         localStorage.setItem('mochi_runner_highscore', highScore.toString());
       }
 
-      ctx.fillStyle = '#2e4a21';
+      ctx.fillStyle = skyState.textRGB;
       ctx.font = 'bold 18px Courier New';
       const displayScore = currentPoints.toString().padStart(5, '0');
       const displayHigh = highScore.toString().padStart(5, '0');
       ctx.fillText(`HI ${displayHigh} ${displayScore}`, canvas.width - 210, 30);
 
-      // Game Over Screen
+      // 10. Game Over Screen
       if (isGameOver) {
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
         ctx.fillRect(0, 0, canvas.width, canvas.height);
 
         ctx.fillStyle = '#ffffff';

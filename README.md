@@ -88,13 +88,26 @@ Feel free to fork this repository and submit Pull Requests! Here are some fun id
 
 An 8-bit retro side-scroller reskin of the classic runner, starring Mochi the calico cat running through a backyard. Lives at [`mochi/index.html`](mochi/index.html), served as its own page at https://tddf-ua.github.io/dino-runner/mochi/.
 
+### Controls
+
+| Action | Input |
+| :--- | :--- |
+| **Short Hop** | Tap / quick press (`Spacebar`, `Up Arrow`, or touch) |
+| **High Jump** | Hold the same input down for a floatier, higher arc |
+| **Restart Game** | Tap or press on Game Over |
+| **Fullscreen Toggle** | 📱 Fullscreen Mode button |
+
 ### Features
 
-* **Custom Pixel-Art Sprites**: Mochi running (2-frame cycle) and jumping poses, potted plant obstacles (basil, roses, lavender), a fig tree with hanging figs, and a scrolling backyard background.
-* **Mobile & Touch Support**: Tapping the canvas jumps or restarts the game; `touch-action: none` and `preventDefault()` stop unwanted scrolling/zooming while playing on a phone.
+* **Variable Jump Physics**: A quick tap gives a short, snappy hop; holding the input sustains upward thrust for a higher arc — released early, upward velocity is cut short.
+* **Dynamic Day/Night Sky Cycle**: The sky smoothly cycles through 6 interpolated phases (Day → Duller Blue → Sunset → Deep Navy → Night Black → Sunrise) every 1,200 points, with a procedural twinkling star field during the Navy/Night phases.
+* **Background Music**: A looping chiptune track (`background_music.mp3`) starts on first input (tap/keypress/fullscreen click), respecting browser autoplay restrictions.
+* **Progressive Difficulty**: Game speed scales continuously with score, and the minimum gap between obstacles shrinks as speed increases, keeping the challenge curve smooth rather than stepped.
+* **Custom Pixel-Art Sprites**: Mochi running (2-frame cycle) and jumping poses, potted plant obstacles (basil, roses, lavender), a fig tree with hanging figs, and a scrolling, mirrored-tile backyard background.
+* **Mobile & Touch Support**: Tapping the canvas jumps (and holding it works the same as a held keypress) or restarts the game; `touch-action: none` and `preventDefault()` stop unwanted scrolling/zooming while playing on a phone.
 * **Responsive Scaling**: Canvas scales fluidly to fit the screen while preserving its 3:1 aspect ratio, including a native Fullscreen Mode toggle.
 * **Persistent High Score**: Best score is saved across sessions via `localStorage` (`mochi_runner_highscore`).
-* **Transparent Sprites**: Near-white pixels (RGB > 215) in the sprite PNGs are converted to transparent alpha at load time in-browser, so no pre-processing step is required to view the game — though a standalone `fix_sprites.py` (Python + Pillow) exists for baking transparency into the source PNGs directly, for anyone editing the art assets.
+* **Transparent Sprites**: An in-browser outer-edge flood-fill (starting from the image border inward) converts near-white background pixels to transparent alpha at load time, without eroding Mochi's white chest/belly fur. No pre-processing step is required to view the game, though a standalone `fix_sprites.py` (Python + Pillow) can bake transparency directly into the source PNGs for anyone editing the art assets locally.
 
 ### Directory Layout
 
@@ -102,6 +115,7 @@ An 8-bit retro side-scroller reskin of the classic runner, starring Mochi the ca
 dino-runner/
 └── mochi/
     ├── index.html            # Mochi game engine, styles, and logic
+    ├── background_music.mp3  # Looping chiptune background track
     ├── Mochi_background.png  # Seamless scrolling backyard background
     ├── Mochi_run1.png        # Mochi running frame 1
     ├── Mochi_run2.png        # Mochi running frame 2
@@ -112,8 +126,6 @@ dino-runner/
     ├── Mochi_figtree.png     # Background Fig Tree
     └── Mochi_fig.png         # Hanging Fig obstacle
 ```
-
-Note: this version of the game plays silently — it does not use the `jump.mp4`/`crash.mp4` audio effects from the classic page.
 
 ## 📄 License
 
