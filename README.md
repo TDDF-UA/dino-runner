@@ -124,8 +124,17 @@ dino-runner/
     ├── Mochi_roses.png       # Potted Roses obstacle
     ├── Mochi_lavender.png    # Potted Lavender obstacle
     ├── Mochi_figtree.png     # Background Fig Tree
-    └── Mochi_fig.png         # Hanging Fig obstacle
+    ├── Mochi_fig.png         # Hanging Fig obstacle
+    └── old-images/           # Archived previous versions of the sprites (not loaded by index.html)
 ```
+
+### Archived Assets (`mochi/old-images/`)
+
+Kept for reference/rollback — these are prior versions of the sprite set superseded by the current assets above, and are not loaded by the live game:
+
+* `Mochi_figtree_sparse.png` — an earlier fig tree variant, replaced by the current `Mochi_figtree.png`.
+* `Mochi_lavender_2.png` — an earlier lavender obstacle variant, replaced by the current `Mochi_lavender.png`.
+* The remaining files mirror the previous versions of `Mochi_background.png`, `Mochi_basil.png`, `Mochi_fig.png`, `Mochi_figtree.png`, `Mochi_jump.png`, `Mochi_lavender.png`, `Mochi_roses.png`, `Mochi_run1.png`, and `Mochi_run2.png` prior to the day/night-cycle and music update.
 
 ## 📄 License
 
